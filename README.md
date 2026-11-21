@@ -8,7 +8,7 @@ Application Android de gestion et de comptabilité pour PME malgaches. Elle fonc
 
 | Fonction | Écriture générée |
 | --- | --- |
-| Transport et frais annexes saisis sur la facture, avec « Qui a payé ces frais ? » | Vente, payé par l'entreprise : D 624 / C 53 · Vente, refacturé : D 411 / C 708 · Achat, facturé par le fournisseur : D 624 / C 401 · Achat, payé par l'entreprise : D 624 / C 53 |
+| Transport et frais annexes saisis sur la facture, avec « Qui a payé ces frais ? » (celui qui a payé en est crédité) | Vente, payé par l'entreprise : D 624 / C 53 · Vente, payé par le client : D 624, déduit du D 411 · Achat, facturé par le fournisseur : D 624, ajouté au C 401 · Achat, payé par l'entreprise : D 624 / C 53 |
 | Avance d'un client ou à un fournisseur : la part d'un règlement non imputée | Encaissement : D 53 / C 419 · Décaissement : D 409 / C 53 |
 | Avance déduite à la validation de la facture (interrupteur « Déduire l'avance ») | Vente : D 411 + D 419 / C 707 · Achat : D 607 / C 401 + C 409 |
 | Avance imputée plus tard depuis le règlement | D 419 / C 411, ou D 401 / C 409 |

@@ -133,7 +133,7 @@ fun InvoiceDetailScreen(vm: AppViewModel, id: String) {
                 TotalRow(
                     when {
                         inv.feePaidBy == FeePayer.COMPANY -> "$feeText (payé par l'entreprise)"
-                        inv.kind.isSale() -> "$feeText (refacturé au client)"
+                        inv.kind.isSale() -> "$feeText (payé par le client, déduit)"
                         else -> "$feeText (facturé par le fournisseur)"
                     },
                     inv.feeAmount

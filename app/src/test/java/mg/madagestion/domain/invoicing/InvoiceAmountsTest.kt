@@ -11,8 +11,8 @@ import org.junit.Test
 
 class InvoiceAmountsTest {
 
-    private fun invoice(fee: String = "0", paidBy: FeePayer? = null) = Invoice(
-        id = "f1", companyId = "c", kind = InvoiceKind.SALE, thirdPartyId = "t",
+    private fun invoice(fee: String = "0", paidBy: FeePayer? = null, kind: InvoiceKind = InvoiceKind.SALE) = Invoice(
+        id = "f1", companyId = "c", kind = kind, thirdPartyId = "t",
         date = LocalDate.of(2026, 1, 10), dueDate = LocalDate.of(2026, 2, 10),
         totalHt = BigDecimal("100000"), totalVat = BigDecimal("20000"), totalTtc = BigDecimal("120000"),
         feeAmount = BigDecimal(fee), feePaidBy = paidBy
@@ -24,11 +24,17 @@ class InvoiceAmountsTest {
     }
 
     @Test
-    fun `des frais refacturés s'ajoutent au montant dû`() {
+    fun `vente - les frais payés par le client sont déduits du montant dû`() {
         val inv = invoice("15000", FeePayer.THIRD_PARTY)
-        assertEquals(BigDecimal("135000"), inv.amountDue())
+        assertEquals(BigDecimal("105000"), inv.amountDue())
         assertEquals(BigDecimal("15000"), inv.feeOnThirdParty())
         assertEquals(BigDecimal.ZERO, inv.feeOnCompany())
+    }
+
+    @Test
+    fun `achat - les frais facturés par le fournisseur s'ajoutent au montant dû`() {
+        val inv = invoice("15000", FeePayer.THIRD_PARTY, InvoiceKind.PURCHASE)
+        assertEquals(BigDecimal("135000"), inv.amountDue())
     }
 
     @Test

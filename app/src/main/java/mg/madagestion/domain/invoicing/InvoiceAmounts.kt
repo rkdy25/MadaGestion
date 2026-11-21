@@ -4,7 +4,7 @@ import java.math.BigDecimal
 import mg.madagestion.data.model.FeePayer
 import mg.madagestion.data.model.Invoice
 
-/** Frais annexes portés au compte du tiers (refacturés au client, ou facturés par le fournisseur). */
+/** Frais annexes payés par le tiers : avancés par le client au transporteur, ou facturés par le fournisseur. */
 fun Invoice.feeOnThirdParty(): BigDecimal =
     if (feePaidBy == FeePayer.THIRD_PARTY) feeAmount else BigDecimal.ZERO
 
@@ -13,10 +13,13 @@ fun Invoice.feeOnCompany(): BigDecimal =
     if (feePaidBy == FeePayer.COMPANY) feeAmount else BigDecimal.ZERO
 
 /**
- * Montant dû par le client (ou au fournisseur) : TTC plus les frais portés à son compte.
- * C'est ce montant qui est réglé, imputé et suivi en « reste à régler ».
+ * Montant dû par le client (ou au fournisseur), réglé, imputé et suivi en « reste à régler » :
+ *  - vente : TTC moins les frais que le client a payés pour l'entreprise (déduits de sa facture) ;
+ *  - achat : TTC plus les frais facturés par le fournisseur.
+ * Celui qui a payé les frais en est crédité.
  */
-fun Invoice.amountDue(): BigDecimal = totalTtc.add(feeOnThirdParty())
+fun Invoice.amountDue(): BigDecimal =
+    if (kind.isSale()) totalTtc.subtract(feeOnThirdParty()) else totalTtc.add(feeOnThirdParty())
 
 /**
  * Répartit [wanted] sur des disponibilités prises dans l'ordre (les plus anciennes d'abord).

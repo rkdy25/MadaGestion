@@ -152,7 +152,9 @@ fun InvoiceEditScreen(vm: AppViewModel, invoiceId: String?, kind: InvoiceKind) {
     val vat = lines.sumBd { lineVat(it) }
     val fee = if (kind.isCredit()) BigDecimal.ZERO else Money.ar(lenientDecimal(feeAmount)).max(BigDecimal.ZERO)
     val feeOnParty = fee.signum() > 0 && feePaidBy == FeePayer.THIRD_PARTY
-    val due = ht.add(vat).add(if (feeOnParty) fee else BigDecimal.ZERO)
+    // Celui qui a payé les frais en est crédité : déduits pour le client, ajoutés pour le fournisseur
+    val feeEffect = if (!feeOnParty) BigDecimal.ZERO else if (sale) fee.negate() else fee
+    val due = ht.add(vat).add(feeEffect)
     val advance = if (kind.isCredit()) BigDecimal.ZERO else advanceAvailable(
         payments, allocations, thirdPartyId,
         if (sale) PaymentDirection.RECEIPT else PaymentDirection.DISBURSEMENT
@@ -298,7 +300,7 @@ fun InvoiceEditScreen(vm: AppViewModel, invoiceId: String?, kind: InvoiceKind) {
                     label = "Qui a payé ces frais ?",
                     options = if (sale) listOf(
                         FeePayer.COMPANY to "L'entreprise (sortie de caisse, banque…)",
-                        FeePayer.THIRD_PARTY to "Refacturé au client (ajouté à sa facture)"
+                        FeePayer.THIRD_PARTY to "Le client (déduit de sa facture)"
                     ) else listOf(
                         FeePayer.THIRD_PARTY to "Le fournisseur (compris dans sa facture)",
                         FeePayer.COMPANY to "L'entreprise (payé directement au transporteur)"
@@ -310,10 +312,9 @@ fun InvoiceEditScreen(vm: AppViewModel, invoiceId: String?, kind: InvoiceKind) {
                 if (feePaidBy == FeePayer.COMPANY) {
                     PaymentMethodField(feeMethod, { feeMethod = it }, Modifier.fillMaxWidth())
                 }
-                val rebilled = sale && feePaidBy == FeePayer.THIRD_PARTY
                 AccountField(
-                    label = if (rebilled) "Compte de produit (défaut : 708)" else "Compte de charge (défaut : 624)",
-                    accounts = accounts.filter { it.code.startsWith(if (rebilled) "7" else "6") },
+                    label = "Compte de charge (défaut : 624)",
+                    accounts = accounts.filter { it.code.startsWith("6") },
                     selectedId = feeAccountId,
                     onSelect = { feeAccountId = it },
                     modifier = Modifier.fillMaxWidth(),
@@ -322,7 +323,7 @@ fun InvoiceEditScreen(vm: AppViewModel, invoiceId: String?, kind: InvoiceKind) {
                 Text(
                     when {
                         feePaidBy == FeePayer.COMPANY -> "Écriture : débit du compte de charge, crédit de la trésorerie choisie."
-                        rebilled -> "Écriture : les frais s'ajoutent au montant dû par le client (411) et vont au crédit du compte de produit."
+                        sale -> "Écriture : débit du compte de charge ; les frais sont déduits du montant dû par le client (411)."
                         else -> "Écriture : les frais s'ajoutent au montant dû au fournisseur (401) et vont au débit du compte de charge."
                     },
                     color = Muted, fontSize = 11.sp
@@ -372,7 +373,7 @@ fun InvoiceEditScreen(vm: AppViewModel, invoiceId: String?, kind: InvoiceKind) {
                 TotalRow(
                     when {
                         feePaidBy == FeePayer.COMPANY -> "Frais payés par l'entreprise (hors facture)"
-                        sale -> "Frais refacturés au client"
+                        sale -> "Frais payés par le client (déduits)"
                         else -> "Frais facturés par le fournisseur"
                     },
                     fee

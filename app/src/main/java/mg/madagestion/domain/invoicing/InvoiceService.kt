@@ -39,8 +39,9 @@ data class InvoiceLineInput(
 
 /**
  * Transport ou frais annexes saisis avec une facture.
- * @property paidBy COMPANY = l'entreprise paie (sortie de [method]) ; THIRD_PARTY = refacturé au client / facturé par le fournisseur.
- * @property accountId compte choisi ; null = compte par défaut (624 pour une charge, 708 pour des frais refacturés).
+ * @property paidBy COMPANY = l'entreprise paie (sortie de [method]) ;
+ *   THIRD_PARTY = payé par le client (déduit de sa facture) ou facturé par le fournisseur (ajouté à sa facture).
+ * @property accountId compte de charge choisi ; null = compte « Transport et frais annexes » (624).
  */
 data class InvoiceFeeInput(
     val label: String,
@@ -58,8 +59,8 @@ data class InvoiceFeeInput(
  *  - vente : D 411 (et D 419 pour l'avance déduite) / C 707 ou 706, C TVA collectée ;
  *  - achat : D 607 ou 606, D TVA déductible / C 401 (et C 409 pour l'avance déduite) ;
  *    un article stocké entre en stock par D 311 / C 6037 ;
- *  - frais annexes : D 624 / C trésorerie si l'entreprise paie ; sinon portés au compte du tiers
- *    (C 708 refacturé au client, ou D 624 facturé par le fournisseur) ;
+ *  - frais annexes, toujours au débit de 624 : contrepartie C trésorerie si l'entreprise paie ;
+ *    sinon le compte du tiers (D 411 diminué des frais payés par le client, C 401 augmenté des frais du fournisseur) ;
  *  - avoir avec retour de marchandises : les articles reviennent en stock (ou en sortent pour un retour
  *    fournisseur), et l'avoir est imputé d'office sur sa facture d'origine.
  */
@@ -157,6 +158,9 @@ class InvoiceService(
         } else {
             db.invoiceDao().update(invoice)
             db.invoiceDao().deleteLines(id)
+        }
+        if (invoice.amountDue().signum() <= 0) {
+            throw BusinessException("Les frais payés par le client ne peuvent pas atteindre le montant de la facture.")
         }
         db.invoiceDao().insertLines(entities)
         accounting.audit(companyId, if (existing == null) "INVOICE_CREATE" else "INVOICE_UPDATE", "INVOICE", id)
@@ -322,6 +326,7 @@ class InvoiceService(
 
             // Avances du tiers déduites de la facture (419 client / 409 fournisseur)
             val due = inv.amountDue()
+            if (due.signum() <= 0) throw BusinessException("Les frais payés par le client ne peuvent pas atteindre le montant de la facture.")
             val advanceParts = if (useAdvance && !credit) {
                 val direction = if (sale) PaymentDirection.RECEIPT else PaymentDirection.DISBURSEMENT
                 takeInOrder(payments.advancesOf(c, tp.id, direction), due)
@@ -344,12 +349,10 @@ class InvoiceService(
             // Transport et frais annexes
             if (inv.feeAmount.signum() > 0 && inv.feePaidBy != null) {
                 val text = inv.feeLabel.ifBlank { "Transport et frais annexes" }
-                val rebilled = sale && inv.feePaidBy == FeePayer.THIRD_PARTY
-                val feeAcc = inv.feeAccountId
-                    ?: accounting.mappingId(c, if (rebilled) MappingKey.CUSTOMER_CHARGES else MappingKey.SUPPLIER_CHARGES)
+                val feeAcc = inv.feeAccountId ?: accounting.mappingId(c, MappingKey.SUPPLIER_CHARGES)
                 when (inv.feePaidBy) {
-                    // Déjà compris dans le montant dû par le client (D 411) ou au fournisseur (C 401)
-                    FeePayer.THIRD_PARTY -> entryLines += line(feeAcc, inv.feeAmount, !rebilled, null, text)
+                    // Contrepartie déjà dans le compte du tiers : D 411 diminué (vente) ou C 401 augmenté (achat)
+                    FeePayer.THIRD_PARTY -> entryLines += line(feeAcc, inv.feeAmount, true, null, text)
                     FeePayer.COMPANY -> {
                         val method = inv.feeMethod ?: PaymentMethod.CASH
                         payments.requireCash(c, method, inv.feeAmount)
