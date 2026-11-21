@@ -1,0 +1,10 @@
+# Sorties de compilation
+.gradle/
+build/
+app/build/
+local.properties
+
+# Environnements de développement
+.idea/
+*.iml
+.DS_Store
